@@ -1,0 +1,256 @@
+---
+title: "WindRoses & Time Variation plot PM2.5 en NO2"
+author: "Peter Scherpenisse"
+date: "16-12-2021"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(dplyr)
+library(ggplot2)
+library(openair)
+library(OpenStreetMap)
+library(lubridate)
+
+#library(openairmaps) from github
+#install.packages("remotes")
+#remotes::install_github("davidcarslaw/openairmaps")
+
+#oldwd <- getwd()
+#setwd("O://DGK/IRAS/EEPI/Projects/IB_Limburg/ILM meetnetwerk Brabant/Careboxen TNO")
+
+result_read <- function(filename){
+  ILM <- read.table(filename, sep=";")
+  colnames(ILM)<- ILM[2,]; colnames(ILM)[2] <- "Local.Time"; colnames(ILM)[1] <- "UTC.time"
+  ILM <- ILM[4:nrow(ILM),]
+  ILM$PM1 <- gsub(",", ".", ILM$PM1) ##transfer decimal , to . en maak er een getal van 
+  ILM$PM1<- as.numeric(ILM$PM1)
+  ILM$PM2.5 <- gsub(",", ".", ILM$PM2.5)
+  ILM$PM2.5<- as.numeric(ILM$PM2.5)
+  ILM$PM10 <- gsub(",", ".", ILM$PM10)
+  ILM$PM10<- as.numeric(ILM$PM10)
+  ILM$NO2 <- gsub(",", ".", ILM$NO2)
+  ILM$NO2<- as.numeric(ILM$NO2)
+  ILM$Lon <- gsub(",", ".", ILM$Lon)
+  ILM$Lon <- as.numeric(ILM$Lon)
+  ILM$Lat <- gsub(",", ".", ILM$Lat)
+  ILM$Lat<- as.numeric(ILM$Lat)
+  ILM$UTC.time <- substr(ILM$UTC.time,1,16)
+  ILM$date <- ymd_hm(ILM$UTC.time)
+  ILM$date_tekst <- as.character(ILM$UTC.time)
+  return(ILM)
+}
+
+setwd("C://Software/RProject/MeetnetwerkBrabant")
+
+ILM041 <- result_read("O://DGK/IRAS/EEPI/Projects/IB_Limburg/ILM meetnetwerk Brabant/Careboxen TNO/Fijnstof-monitoring data.2021-01-01.2021-12-01_ILM041.csv")
+ILM042 <- result_read("O://DGK/IRAS/EEPI/Projects/IB_Limburg/ILM meetnetwerk Brabant/Careboxen TNO/Fijnstof-monitoring data.2021-01-01.2021-12-01_ILM042.csv")
+ILM043 <- result_read("O://DGK/IRAS/EEPI/Projects/IB_Limburg/ILM meetnetwerk Brabant/Careboxen TNO/Fijnstof-monitoring data.2021-01-01.2021-12-01_ILM043.csv")
+ILM044 <- result_read("O://DGK/IRAS/EEPI/Projects/IB_Limburg/ILM meetnetwerk Brabant/Careboxen TNO/Fijnstof-monitoring data.2021-01-01.2021-12-01_ILM044.csv")
+ILM045 <- result_read("O://DGK/IRAS/EEPI/Projects/IB_Limburg/ILM meetnetwerk Brabant/Careboxen TNO/Fijnstof-monitoring data.2021-01-01.2021-12-01_ILM045.csv")
+
+
+weerdata <- read.table(file="./Data/Weerdata KNMI 2020.txt", sep="\t", header=TRUE)
+weerdata <- weerdata %>%
+  filter(STN==370) %>% 
+  mutate(ymd=as.character(YYYYMMDD)) %>% 
+  mutate(UTC.time=paste0(substr(ymd,1,4),"-", substr(ymd,5,6),"-", substr(ymd,7,8)," ",as.character(H),":00:00")) %>% 
+  mutate(UTC.time=ymd_hms(UTC.time)) %>% 
+  mutate(UTC.time=as.character(UTC.time)) %>% 
+  mutate(UTC.time=substr(UTC.time,1,16))##beetje ingewikkeld om gelijke lengte tekst te krijgen voor elk tijdstip
+
+
+
+
+```
+
+```{r, fig.height=4}
+lat <- c(51.4320, 51.5923, 51.5305, 51.3564, 51.5834)
+lon <- c(5.6273, 5.7812, 5.2846, 5.6360, 5.5480)
+loc <- c("ILM041", "ILM042", "ILM043", "ILM044", "ILM045")
+meetlocaties <- cbind.data.frame(loc,lat, lon)
+
+lat <- c(51.196667, 51.45926, 51.65854)
+lon <- c(5.7625, 5.38323, 5.70662)
+loc <- c("Ell", "Eindhoven","Volkel")
+KNMIloc <- cbind.data.frame(loc, lat, lon)
+
+
+
+nl <- openmap(c(51.75 ,5.2), c(51, 5.9), zoom=10, type="osm", mergeTiles=TRUE)
+nl_map2 <- openproj(nl)
+nl_map2_plt <- OpenStreetMap::autoplot.OpenStreetMap(nl_map2)+
+  geom_point(data=meetlocaties, aes(x=lon, y=lat), col="red", size=3)+
+  annotate("text", x=meetlocaties$lon, y=meetlocaties$lat+0.02, label=meetlocaties$loc, col="darkblue")+
+  geom_point(data=KNMIloc, aes(x=lon, y=lat), col="purple", shape=21, size=2, stroke=2, fill="white")+
+  annotate("text", x=KNMIloc$lon-0.02, y=KNMIloc$lat, label=KNMIloc$loc, col="purple")
+print(nl_map2_plt)
+
+
+ILM41 <- left_join(ILM041, weerdata, by="UTC.time") %>% mutate(location="ILM41")
+ILM42 <- left_join(ILM042, weerdata, by="UTC.time") %>% mutate(location="ILM42")
+ILM43 <- left_join(ILM043, weerdata, by="UTC.time") %>% mutate(location="ILM43")
+ILM44 <- left_join(ILM044, weerdata, by="UTC.time") %>% mutate(location="ILM44")
+ILM45 <- left_join(ILM045, weerdata, by="UTC.time") %>% mutate(location="ILM45")
+total_ILM <- rbind(ILM41, ILM42, ILM43, ILM44, ILM45)
+
+total_ILM2 <- total_ILM %>%   ##selecteert en alleen hele uren over alsmede weglaten DD=0 en DD=990
+  select(STN, UTC.time, YYYYMMDD, H, DD, FH, FF, PM1, PM2.5, PM10, NO2, location, date) %>% 
+  filter(DD!=0) %>% 
+  filter(DD !=990) %>% 
+  mutate(FH=FH/10, FF=FF/10)
+
+pollutionRose(total_ILM2, ws="FH", wd="DD", pollutant=c("PM1") , type="location")
+pollutionRose(total_ILM2, ws="FH", wd="DD", pollutant=c("PM2.5") , type="location")
+pollutionRose(total_ILM2, ws="FH", wd="DD", pollutant=c("PM10") , type="location")
+pollutionRose(total_ILM2, ws="FH", wd="DD", pollutant=c("NO2") , type="location")
+
+timvar_PM1 <- timeVariation(total_ILM, pollutant="PM1", group ="location", ci=FALSE)
+timvar_PM2.5 <- timeVariation(total_ILM, pollutant="PM2.5", group ="location", ci=FALSE)
+timvar_PM10 <- timeVariation(total_ILM, pollutant="PM10", group ="location", ci=FALSE)
+timvar_NO2 <- timeVariation(total_ILM, pollutant="NO2", group ="location", ci=FALSE)
+
+
+```
+
+
+```{r PM_same_timepoints, fig.height=4}
+colnames(ILM041) <- c("UTC.time_041","local.time_041", "lat_041", "lon_041", "PM1_041", "PM2.5_041", "PM10_041", "NO2_041", "date_041", "date_tekst")
+colnames(ILM042) <- c("UTC.time_042","local.time_042" ,"lat_042", "lon_042", "PM1_042", "PM2.5_042", "PM10_042", "NO2_042", "date_042", "date_tekst")
+colnames(ILM043) <- c("UTC.time_043","local.time_043" ,"lat_043", "lon_043", "PM1_043", "PM2.5_043", "PM10_043", "NO2_043", "date_043", "date_tekst")
+colnames(ILM044) <- c("UTC.time_044","local.time_044" ,"lat_044", "lon_044", "PM1_044", "PM2.5_044", "PM10_044", "NO2_044", "date_044", "date_tekst")
+colnames(ILM045) <- c("UTC.time_045","local.time_045" ,"lat_045", "lon_045", "PM1_045", "PM2.5_045", "PM10_045", "NO2_045", "date_045", "date_tekst")
+
+inner <- inner_join(ILM041, ILM042, by="date_tekst")
+inner <- inner_join(inner, ILM043, by="date_tekst")
+inner <- inner_join(inner, ILM044, by="date_tekst")
+inner <- inner_join(inner, ILM045, by="date_tekst")
+
+inner2 <- inner %>% 
+  dplyr::select(date_tekst, PM1_041, PM2.5_041, PM10_041, NO2_041,
+                PM1_042, PM2.5_042, PM10_042, NO2_042,
+                PM1_043, PM2.5_043, PM10_043, NO2_043,
+                PM1_044, PM2.5_044, PM10_044, NO2_044,
+                PM1_045, PM2.5_045, PM10_045, NO2_045) 
+  
+
+inner3 <- inner2 %>% 
+  dplyr::select(date_tekst, `PM1_041`, `PM2.5_041`, `PM10_041`, `NO2_041`) %>% 
+  mutate(location="ILM041") %>% 
+  rename(PM1=`PM1_041`,PM2.5=`PM2.5_041`,PM10=`PM10_041`, NO2=`NO2_041`)
+ 
+ILM42 <- inner2 %>%                                   
+  dplyr::select(date_tekst, `PM1_042`, `PM2.5_042`, `PM10_042`,`NO2_042`) %>% 
+  mutate(location="ILM042") %>% 
+  rename(PM1=`PM1_042`,PM2.5=`PM2.5_042`,PM10=`PM10_042`,NO2=`NO2_042`)
+ILM43 <- inner2 %>%                                   
+  dplyr::select(date_tekst, `PM1_043`, `PM2.5_043`, `PM10_043`, `NO2_043`) %>% 
+  mutate(location="ILM043") %>% 
+  rename(PM1=`PM1_043`,PM2.5=`PM2.5_043`,PM10=`PM10_043`, NO2=`NO2_043`)
+ILM44 <- inner2 %>%                                   
+  dplyr::select(date_tekst, `PM1_044`, `PM2.5_044`, `PM10_044`, `NO2_044`) %>% 
+  mutate(location="ILM044") %>% 
+  rename(PM1=`PM1_044`, PM2.5=`PM2.5_044`,PM10=`PM10_044`, NO2=`NO2_044`)
+ILM45 <- inner2 %>%                                   
+  dplyr::select(date_tekst, `PM1_045`, `PM2.5_045`, `PM10_045`, `NO2_045`) %>% 
+  mutate(location="ILM045") %>% 
+  rename(PM1=`PM1_045`,PM2.5=`PM2.5_045`,PM10=`PM10_045`, NO2=`NO2_045`)
+inner3 <- rbind(inner3, ILM42, ILM43, ILM44, ILM45)
+inner4 <- inner3 %>% mutate(heel_uur=ifelse(substr(date_tekst,15,16)=="00", 1,0))
+inner5 <- left_join(inner4, weerdata, by=c("date_tekst"="UTC.time"))
+inner5a <- inner5 %>% filter(!is.na(YYYYMMDD)) %>% ##let op alleen hele uren blijven
+  mutate(date=ymd_hm(date_tekst)) %>% 
+  rename(wd=DD, ws=FH) %>% 
+  mutate(ws=ws/10)
+
+inner6 <- inner5a %>% 
+  dplyr::select(date, location, PM1, PM2.5, PM10, NO2, wd, ws, ymd) %>% 
+  filter(wd!=0) %>%   ##wd=0 windstil; 990 = veranderlijk
+  filter(wd!=990)
+
+inner7 <- inner6 %>% 
+  filter(!is.na(PM1)) %>% 
+  filter(!is.na(PM2.5)) %>% 
+  filter(!is.na(PM10)) %>% 
+  filter(!is.na(NO2))
+
+for (i in c("PM1", "PM2.5", "PM10", "NO2")) {
+ polarPlot(inner6, pollutant = i, type=("location"))
+}
+for (i in c("PM1", "PM2.5", "PM10")) {
+  timeVariation(inner6, pollutant=i, group="location", ci=FALSE)
+}
+for (i in c("PM1", "PM2.5", "PM10")) {
+  percentileRose(inner6, pollutant = i, type="location", mean.col="black")
+}
+for (i in c("PM1", "PM2.5", "PM10")) {
+  pollutionRose(inner6, ws="ws", wd="wd", pollutant=i , type="location")
+}
+
+timePlot(selectByDate(inner6, year=2021, start= "2021-07-01", end="2021-07-31"), pollutant=c("PM10"), type="location", ylim=c(0,100), main="Juli 2021")
+timePlot(selectByDate(inner6, year=2021, start= "2021-08-01", end="2021-08-31"), pollutant=c("PM10"), type="location", ylim=c(0,100), main="Augustus 2021")
+timePlot(selectByDate(inner6, year=2021, start= "2021-09-01", end="2021-09-30"), pollutant=c("PM10"), type="location", ylim=c(0,100), main="September 2021")
+timePlot(selectByDate(inner6, year=2021, start= "2021-10-01", end="2021-10-31"), pollutant=c("PM10"), type="location", ylim=c(0,100), main="Oktober 2021")
+timePlot(selectByDate(inner6, year=2021, start= "2021-11-01", end="2021-11-30"), pollutant=c("PM10"), type="location", ylim=c(0,100), main="November 2021")
+
+
+for (i in c("ILM041", "ILM042", "ILM043", "ILM044", "ILM045")) {
+  inner6a <- subset(inner6, inner6$location==i)
+  calendarPlot(inner6a, pollutant="PM1", main=paste(i, "PM1"))
+  calendarPlot(inner6a, pollutant="PM2.5", main=paste(i, "PM2.5"))
+  calendarPlot(inner6a, pollutant="PM10", main=paste(i, "PM10"))
+}
+## nog toe te voegen
+## Polar frequency;
+polarFreq(inner6[inner6$location=="ILM041",],type="location",trans=FALSE,ws.int=0.25) 
+##windrichting/snelheid frequency
+##weighted mean= concentratie * frequency
+polarFreq(inner6, pollutant="PM2.5", type="location", statistic="weighted.mean", min.bin=3, trans=FALSE, ws.int=0.25)
+polarFreq(inner6, pollutant="PM2.5", type="location", statistic="mean", min.bin=3, trans=FALSE, ws.int=0.25)
+
+##vergelijk MEan, Weighted.Mean and Frequency voor PM10
+i <- "PM10"
+polarPlot(inner6, pollutant = i, type=("location"), statistic="weighted.mean", main="Weigthed.mean")
+polarPlot(inner6, pollutant = i, type=("location"), statistic="mean", main="Mean")
+polarPlot(inner6, pollutant = i, type=("location"), statistic="frequency", main="Frequency")
+```
+
+\newpage
+
+
+```{r polarPlot_compare, fig.height=5}
+
+
+inner7 <- inner6 %>% 
+  mutate(wd_text=case_when(
+    wd>0 & wd<=22.5 ~ "N",
+    wd>22.5 & wd <= 67.5 ~ "NO",
+    wd>67.5 & wd <= 112.5 ~ "O",
+    wd>112.5 & wd <= 157.5 ~ "ZO",
+    wd>157.5 & wd <= 202.5 ~ "Z",
+    wd>202.5 & wd <= 247.5 ~ "ZW",
+    wd>247.5 & wd <= 292.5 ~ "W",
+    wd>292.5 & wd <= 337.5 ~ "NW",
+    wd>337.5 & wd<=360 ~ "N",
+    wd==0 ~ "Var"))
+
+inner7 <- subset(inner7, inner7$location=="ILM041")
+inner8 <- polarCluster(inner7, pollutant="PM10", n.clusters=7, cols="Set2")
+
+
+cluster5 <- inner8[["data"]]
+cluster5 <- cluster5[cluster5$cluster==5,]
+cluster5$datum <- substr(as.character(cluster5$date),1,10)
+cluster5.stat <- cluster5 %>% 
+  group_by(datum) %>% 
+  summarize(round(mean(PM10),2), round(sd(PM10),2), n=n()) 
+colnames(cluster5.stat) <- c("Datum", "Mean", "St.Dev", "n")
+
+table(as.Date(cluster5$datum))
+
+
+
+
+```
+
